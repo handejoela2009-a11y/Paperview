@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo se respaldan las preferencias visuales (DataStore). Nunca hay datos
+     de otras apps que respaldar porque PaperView no los recopila. -->
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="datastore/" />
+</full-backup-content>

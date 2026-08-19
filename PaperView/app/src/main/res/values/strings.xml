@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">PaperView</string>
+    <string name="tile_label">PaperView</string>
+    <string name="notification_channel_name">PaperView activo</string>
+    <string name="notification_active_title">PaperView está activo</string>
+    <string name="notification_active_text">Toca para ajustar el filtro. Desactivar la detiene al instante.</string>
+    <string name="notification_action_disable">Desactivar</string>
+
+    <string name="permission_overlay_title">Permiso de superposición</string>
+    <string name="permission_overlay_reason">Necesario para dibujar el filtro visual encima de otras apps.</string>
+    <string name="permission_overlay_enables">Habilita: el efecto de papel/E-Ink mientras usas cualquier app.</string>
+    <string name="permission_overlay_denied">Si lo rechazas, PaperView no podrá aplicar ningún filtro visual global; el resto de la app seguirá funcionando.</string>
+
+    <string name="permission_notifications_title">Permiso de notificaciones</string>
+    <string name="permission_notifications_reason">Muestra el estado "PaperView activo" y el acceso rápido para desactivarlo.</string>
+    <string name="permission_notifications_enables">Habilita: notificación persistente opcional y recordatorios de descanso.</string>
+    <string name="permission_notifications_denied">Si lo rechazas, el filtro seguirá funcionando pero sin notificación de estado ni recordatorios visibles.</string>
+</resources>

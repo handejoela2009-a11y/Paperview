@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Necesario para dibujar la capa (overlay) de filtro sobre otras apps.
+         Sin este permiso PaperView no puede aplicar ningún efecto visual global. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Permite que el servicio de overlay siga vivo mientras el usuario usa
+         otras apps (requisito de Android 8+ para servicios de larga duración). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Mostrar la notificación persistente opcional de "PaperView activo". -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Reanudar el filtro tras reiniciar el dispositivo si el usuario lo activó. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- El sensor de luz ambiental es un sensor "normal", no requiere permiso en runtime,
+         pero se declara como característica opcional: la app funciona sin él. -->
+    <uses-feature
+        android:name="android.hardware.sensor.light"
+        android:required="false" />
+
+    <application
+        android:name=".PaperViewApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.PaperView"
+        android:supportsRtl="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.PaperView">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Servicio en primer plano que dibuja el overlay de filtro.
+             No lee contenido de otras apps: solo dibuja una vista encima. -->
+        <service
+            android:name=".service.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Capa visual de comodidad de lectura (filtro de color local, sin acceso a datos de otras apps)" />
+        </service>
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Quick Settings Tile: activar/desactivar PaperView desde el panel rápido. -->
+        <service
+            android:name=".quicksettings.PaperViewTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_paper"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>
