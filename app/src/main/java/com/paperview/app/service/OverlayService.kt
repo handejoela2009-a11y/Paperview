@@ -7,7 +7,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
-import android.graphics.PorterDuff
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.IBinder
@@ -31,19 +30,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalTime
 import kotlin.math.max
 
-/**
- * Servicio en primer plano responsable de:
- *  1. Comprobar (nunca asumir) que Android concedió el permiso de overlay.
- *  2. Dibujar una única View transparente a pantalla completa, tintada según
- *     FilterEngine, por encima de todo lo demás (TYPE_APPLICATION_OVERLAY).
- *  3. Aplicar transiciones progresivas (nunca saltos bruscos) cuando cambian
- *     los ajustes, la hora del día o la luz ambiental.
- *  4. Mostrar una notificación de estado con acción rápida de desactivar.
- *
- * Este servicio NO lee, captura ni analiza el contenido que hay debajo del
- * overlay: la View es transparente a los toques (FLAG_NOT_TOUCHABLE /
- * FLAG_NOT_FOCUSABLE) y no usa ningún servicio de accesibilidad.
- */
 class OverlayService : Service() {
 
     companion object {
@@ -85,16 +71,14 @@ class OverlayService : Service() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         lightSensorManager = LightSensorManager(this)
 
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+
         if (!hasOverlayPermission(this)) {
-            // Honestidad técnica (sección 32): si no hay permiso, no fingimos
-            // que el filtro está activo. Se detiene el servicio y se deja que
-            // la UI informe al usuario para que lo conceda desde ajustes.
             stopSelf()
             return
         }
 
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification())
         addOverlayView()
         lightSensorManager.start()
         observeSettings()
@@ -117,8 +101,6 @@ class OverlayService : Service() {
         super.onDestroy()
     }
 
-    // --- Overlay window -----------------------------------------------------
-
     private fun addOverlayView() {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -131,12 +113,9 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             type,
-            // No consume toques ni foco: la app de debajo se sigue usando con
-            // total normalidad (requisito de la sección 15).
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         )
         params.gravity = Gravity.TOP or Gravity.START
@@ -146,7 +125,7 @@ class OverlayService : Service() {
         }
         overlayView = view
         runCatching { windowManager.addView(view, params) }
-            .onFailure { stopSelf() } // dispositivo/OEM restringe el overlay: no fingir que funciona
+            .onFailure { stopSelf() }
     }
 
     private fun removeOverlayView() {
@@ -156,24 +135,11 @@ class OverlayService : Service() {
 
     private fun renderAppearance(appearance: FilterEngine.OverlayAppearance) {
         val view = overlayView ?: return
-        val drawable = ColorDrawable(appearance.tintColor).apply {
-            alpha = appearance.tintAlpha
-            setColorFilter(appearance.tintColor, PorterDuff.Mode.MULTIPLY)
-        }
-        // Se compone tinte + oscurecimiento como dos capas dentro del mismo
-        // background usando un LayerDrawable simplificado vía alpha combinado,
-        // ya que la vista es única y transparente.
-        view.background = drawable
-        view.alpha = 1f
-        // El oscurecimiento puro se aplica subiendo el alfa efectivo del negro
-        // mezclado sobre el tinte: se aproxima combinando ambos alfas.
-        val combined = ColorDrawable(appearance.dimColor)
-        combined.alpha = appearance.dimAlpha
-        view.foreground = combined
+        val combinedColor = FilterEngine.compose(appearance)
+        view.background = ColorDrawable(combinedColor)
+        view.foreground = null
         currentAppearance = appearance
     }
-
-    // --- Reacciona a ajustes, hora y luz ambiental --------------------------
 
     private fun observeSettings() {
         scope.launch {
@@ -184,9 +150,6 @@ class OverlayService : Service() {
                 .collectLatest { (settings, lux) ->
                     val target = if (settings.autoAdaptationEnabled) {
                         val timeAdjusted = autoAdaptation.presetForTime(LocalTime.now())
-                        // Se combinan los sliders manuales del usuario con el
-                        // preset horario solo si el usuario no personalizó,
-                        // para no pisar una configuración manual explícita.
                         val base = if (settings.id == "personalizado") settings else timeAdjusted
                         autoAdaptation.adjustForAmbientLight(base, lux)
                     } else {
@@ -197,8 +160,6 @@ class OverlayService : Service() {
         }
     }
 
-    /** Nunca aplica un cambio de golpe: interpola durante `durationMs`
-     *  (secciones 10 y 12 — "evitar cambios bruscos"). */
     private fun transitionTo(target: FilterEngine.OverlayAppearance, durationMs: Long) {
         val start = currentAppearance ?: run {
             renderAppearance(target)
@@ -214,8 +175,6 @@ class OverlayService : Service() {
             }
         }
     }
-
-    // --- Notificación de estado ---------------------------------------------
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
